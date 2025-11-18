@@ -63,6 +63,6 @@ Tools:
 
 
 MCP Diagram
-![alt text](/Users/michaelnair/Desktop/random_projects/voting_info_agent/results/mcp_sequence_template_20251118_164814.png)
+![alt text](/Users/michaelnair/Desktop/random_projects/voting-info-agent/diagrams/mcp_sequence_template_20251118_173118.png)
 
 

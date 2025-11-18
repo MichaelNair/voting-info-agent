@@ -4,13 +4,13 @@ from datetime import datetime
 from pathlib import Path
 
 
-def render_diagram(mermaid_file: str, output_dir: str = "results") -> str:
+def render_diagram(mermaid_file: str, output_dir: str = "diagrams") -> str:
     """
     Render a Mermaid diagram file to an image and save it with a timestamp.
     
     Args:
         mermaid_file: Path to the .mmd or .mermaid file
-        output_dir: Directory to save the rendered image (default: "results")
+        output_dir: Directory to save the rendered image (default: "diagrams")
     
     Returns:
         Path to the saved image file
@@ -24,7 +24,7 @@ def render_diagram(mermaid_file: str, output_dir: str = "results") -> str:
     if not mermaid_path.exists():
         raise FileNotFoundError(f"Mermaid file not found: {mermaid_file}")
     
-    # Create results directory if it doesn't exist
+    # Create diagrams directory if it doesn't exist
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
