@@ -1,0 +1,55 @@
+%% MCP-style sequence diagram template
+%% Edit the labels and messages as you like.
+%% You can paste this into mermaid.live or any Mermaid-enabled Markdown renderer.
+
+sequenceDiagram
+    %% Participants / lifelines
+    participant U as User
+    participant H as Host Application\n(Orchestrator & LLM)
+    participant C as MCP Client
+
+    participant WS as Web Scrapper MCP server
+    participant API as Web API
+
+    participant DS as Database MCP server
+    participant DB as Database
+
+    participant P as Python MCP server
+    participant PL as Python Library
+
+    %% High-level interaction
+    U->>H: "How do I vote by mail in the upcomming Virginia state election?"
+    H->>C: MCP Request: Find today's date.
+    C->>P: [JSON-RPC or other call]
+    P-->>C: [response]
+    C-->>H: [structured MCP response]
+    H-->>U: [intermediate / partial result]
+
+    %% Second tool interaction
+    H->>C: MCP Request: Fin the date of the next election.
+    C->>WS: [JSON-RPC or other call]
+    WS-->>C: [DB results]
+    C-->>H: [structured MCP response]
+    H-->>U: [final result]
+
+    %% Third tool interaction
+    H->>C: MCP Request: Find the website that explain vote by mail in Virginia.
+    C->>WS: [JSON-RPC or other call]
+    WS-->>C: [DB results]
+    C-->>H: [structured MCP response]
+    H-->>U: [final result]
+
+    %% Fourth tool interaction
+    H->>C: MCP Request: Find the vote by Mail deadlines for the next election.
+    C->>WS: [JSON-RPC or other call]
+    WS-->>C: [DB results]
+    C-->>H: [structured MCP response]
+    H-->>U: [final result]
+
+    %% Optional internal calls from servers to external systems
+    WS->>API: [native web/API calls]
+    API-->>WS: [API responses]
+
+    %% Note over Host (edit or delete)
+    Note over H: Orchestration logic here.\nFill in how the host app\ncoordinates tools & LLM.
+
