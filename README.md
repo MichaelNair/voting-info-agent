@@ -1,70 +1,74 @@
-This is a design and implementation of an MCP agent that explains to people how to vote.
-This tool will be focused on state and national elections for now.
+# Voting Info Agent
 
-This will be using openai's gpt-5.1 model.
+Status: Planning & design only — implementation work has not started.
 
-Capabilities:
-- Tell a person there closest polling location
-- Tell a person the date of the election
-- Tell a person the times a given polling location opens and closes
+## Overview
+Voting Info Agent is an MCP (Model Context Protocol) agent that will guide voters through the logistics of participating in U.S. state and federal elections. The agent will run on OpenAI’s `gpt-5.1` model and orchestrate a collection of data-enrichment tools to answer practical questions such as where to vote, when polling locations are open, and how to request absentee ballots.
 
-- Tell a person steps to do early-in-person voting in there state
-- Tell a person dates early-in-person voting starts and ends
-- Tell a person location for early-in-person voting
-- Tell a person times early-in-person voting locations are open
+## Objectives
+- Provide accurate, timely election logistics tailored to a voter’s location.
+- Support on‑demand answers for election-day, early in-person, and mail-in voting.
+- Serve as a centralized planning document for data sources, tooling, and schema requirements ahead of implementation.
 
-- Tell a person how to request a mail-in-ballot in there state
-- Tell a person the date by which they have to request the ballot (may require extrapolation)
-- Tell a person the date by which they have to send the ballot
-- Tell a person the date by which the ballot has to arrive to be counted (I think this may be the way some states do it)
+## Planned Capabilities
+- Return the nearest polling location for a given address or district.
+- Provide election-day dates and polling hours.
+- Explain early in-person voting steps, locations, dates, and operating hours.
+- Explain how to request, submit, and track mail-in ballots, including critical deadlines.
+- Infer a user’s state, district, or precinct from their address.
+- Determine the current date and the next relevant election for a jurisdiction.
 
-- Figure out what State a given address is in
-- Figure out what district/precinct a given address it in
-- Figure out what today's date is
-- Figure out when the nearest election is for a given state
+## Tooling & Integrations
+| Tool | Purpose | Notes |
+| --- | --- | --- |
+| `get_current_date()` | Canonical source of “today” for deadline calculations. | Wrapper around system or trusted API time. |
+| `get_district_from_address()` | Maps an address to state + district/precinct. | Likely aggregates multiple state APIs or commercial geocoding data to stay current. |
+| `get_nearest_election()` | Returns a structured `Election` object (see schema below). | Needs per-state election feeds and fallback heuristics. |
+| `get_contence_from_url()` | Scrapes official state guidance for a specific voting method. | Signature: `(state, election_date, type_of_voting)` where `type_of_voting ∈ {election_day, early_in_person, mail_in_ballot}`. |
+| `find_nearest_polling_location()` | Finds the closest polling place for an address/district on a given date. | Prefer official endpoints; fallback to GIS distance checks (e.g., Google Maps API). |
+| `websearch()` | High-recall lookup for novel or fast-changing requirements. | Executes an OpenAI call with web search enabled and returns the best URL + summary. |
 
-Tools:
-- get_current_date()
-- get_district_from_address()
-    - Gets the voting disctrict or precinct for a given address
-    - There may already be a tool out where that can do this
-    - I know the district's change so I will have to make sure everything is up to date
-    - probably will have to pull from different data sources for different states
-- get_nearest_election()
-    - Will have to make an election object
-    - again this will probably have to: 1. figure out what state and 2. pull from some state spesific source for the information we want
-    - Election class should be
-        - Date early-in-person voting starts
-        - Date early-in-person voting ends
-        - Last Date to request mail-in-ballot
-        - Last Date to send mail-in-ballot
-        - Date mail-in-ballot much be received by
-        - Date of election
-        - State
-        - Voting district or precinct
-        - most common time zone of district or precinct
-        - List of race objects on the ballot
-        - List of candiates for each race object
-        - candidate class 
-            - candidate name
-            - candidate party
-        - List of Ballot questions (I think ballot questions are always yes or no)
-        - ballot-question class
-            - A list of possible answers which should all be strings
-- get_contence_from_url()
-    - get voting instructions from a state website for a given type of voting
-    - May want to save the url for some states
-    - Arguments: state, election_date, type_of_voting (election_day, early_in_person, mail_in_ballot)
-- find_nearest_polling_location()
-    - arguments: address, disctrict/precinct, election_date
-    - find the nearest polling location for that address
-    - There may already be an API for this for some states
-    - If not get a list of all the polling locations for the election_date and compare each using google maps API
-- websearch()
-    - make an openai call with websearch active and return the url and contence of the web page that best answers the question
+## Data Model (Draft)
+`Election`
+- `state`
+- `district_or_precinct`
+- `most_common_time_zone`
+- `date_election_day`
+- `early_voting_start`
+- `early_voting_end`
+- `mail_ballot_request_deadline`
+- `mail_ballot_send_deadline`
+- `mail_ballot_received_deadline`
+- `races: List[Race]`
+- `ballot_questions: List[BallotQuestion]`
 
+`Race`
+- `name`
+- `candidates: List[Candidate]`
 
-MCP Diagram
+`Candidate`
+- `name`
+- `party`
+
+`BallotQuestion`
+- `question_text`
+- `answers: List[str]` (yes/no or other state-specific responses)
+
+## Open Questions
+- Which authoritative APIs provide per-state polling locations and early voting sites?
+- How often do district boundaries change, and what cadence is required to refresh cached data?
+- What level of geocoding accuracy is necessary to handle apartment complexes or rural routes?
+- How should the agent communicate uncertainty when state data conflicts or is unavailable?
+
+## Roadmap (High Level)
+1. Validate available data sources for districts, elections, and polling locations.
+2. Finalize the contract for each MCP tool (inputs, outputs, error semantics).
+3. Implement the data model and persistence strategy for elections and ballot content.
+4. Build and test individual tools, starting with `get_current_date` → `get_district_from_address` → `get_nearest_election`.
+5. Integrate tools into the MCP agent and add guardrails for stale or conflicting data.
+6. Pilot against a small subset of states before expanding nationwide coverage.
+
+## Diagrams
+See `./diagrams/mcp_sequence_template_20251119_095524.png` for the current MCP sequence concept.
+
 ![alt text](./diagrams/mcp_sequence_template_20251119_095524.png)
-
-
