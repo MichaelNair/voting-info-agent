@@ -11,17 +11,11 @@ sequenceDiagram
     participant WS as Web Scrapper MCP server
     participant API as Web API
 
-    participant DS as Database MCP server
-    participant DB as Database
-
-    participant P as Python MCP server
-    participant PL as Python Library
-
     %% High-level interaction
     U->>H: "How do I vote by mail in the upcomming Virginia state election?"
     H->>C: MCP Request: Find today's date.
-    C->>P: [JSON-RPC or other call]
-    P-->>C: [response]
+    C->>WS: [JSON-RPC or other call]
+    WS-->>C: [response]
     C-->>H: [structured MCP response]
     H-->>U: [intermediate / partial result]
 
