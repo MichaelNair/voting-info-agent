@@ -1,14 +1,26 @@
 import asyncio
+import json
+import os
+import shlex
+import subprocess
 from typing import Optional
 from contextlib import AsyncExitStack
+from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from anthropic import Anthropic
+from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
+import sys
+
+
 load_dotenv()  # load environment variables from .env
+
+# source /Users/michaelnair/Desktop/random_projects/voting-info-agent/openai_key.bash
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 class MCPClient:
     def __init__(self):
@@ -16,6 +28,7 @@ class MCPClient:
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
         self.anthropic = Anthropic()
+        self.openai = AsyncOpenAI()
     # methods will go here
 
 
@@ -118,6 +131,102 @@ class MCPClient:
         return "\n".join(final_text)
 
     # TODO: add process_query_openai method
+    async def process_query_openai(self, query: str) -> str:
+        """Process a query using OpenAI and available tools"""
+        if self.session is None:
+            raise RuntimeError("Client session is not initialized.")
+
+        messages = [
+            {
+                "role": "user",
+                "content": query
+            }
+        ]
+
+        response = await self.session.list_tools()
+        available_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema
+                }
+            }
+            for tool in response.tools
+        ]
+
+        final_text: list[str] = []
+
+        async def create_completion():
+            kwargs = {
+                "model": "gpt-5-nano-2025-08-07",
+                "messages": messages
+            }
+            if available_tools:
+                kwargs["tools"] = available_tools
+            return await self.openai.chat.completions.create(**kwargs)
+
+        completion = await create_completion()
+
+        while True:
+            choice = completion.choices[0]
+            message = choice.message
+
+            message_text = self._content_to_text(message.content)
+            if message_text:
+                final_text.append(message_text)
+
+            tool_calls = message.tool_calls or []
+            if not tool_calls:
+                break
+
+            if hasattr(message, "model_dump"):
+                assistant_message = message.model_dump()
+            else:
+                assistant_message = {
+                    "role": message.role,
+                    "content": message.content,
+                }
+                if getattr(message, "tool_calls", None):
+                    assistant_message["tool_calls"] = [
+                        {
+                            "id": tool_call.id,
+                            "type": tool_call.type,
+                            "function": {
+                                "name": tool_call.function.name,
+                                "arguments": tool_call.function.arguments
+                            }
+                        }
+                        for tool_call in tool_calls
+                    ]
+            if not assistant_message.get("content"):
+                assistant_message["content"] = message_text or ""
+            messages.append(assistant_message)
+
+            for tool_call in tool_calls:
+                tool_name = tool_call.function.name
+                arguments = tool_call.function.arguments or "{}"
+                try:
+                    parsed_args = json.loads(arguments)
+                except json.JSONDecodeError:
+                    parsed_args = {}
+
+                result = await self.session.call_tool(tool_name, parsed_args)
+                result_content = getattr(result, "content", result)
+                tool_response_text = self._content_to_text(result_content) or "Tool returned no content."
+
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": tool_response_text
+                    }
+                )
+
+            completion = await create_completion()
+
+        return "\n".join(final_text)
 
 
     async def chat_loop(self):
@@ -132,7 +241,7 @@ class MCPClient:
                 if query.lower() == 'quit':
                     break
 
-                response = await self.process_query_anthropic(query)
+                response = await self.process_query_openai(query)
                 print("\n" + response)
 
             except Exception as e:
@@ -142,21 +251,48 @@ class MCPClient:
         """Clean up resources"""
         await self.exit_stack.aclose()
 
+    @staticmethod
+    def _content_to_text(content) -> str:
+        """Convert mixed content structures into plain text"""
+        if content is None:
+            return ""
 
-    async def main():
-        if len(sys.argv) < 2:
-            print("Usage: python client.py <path_to_server_script>")
-            sys.exit(1)
+        if isinstance(content, str):
+            return content
 
-        client = MCPClient()
+        if isinstance(content, list):
+            parts = [MCPClient._content_to_text(item) for item in content]
+            return "\n".join(part for part in parts if part)
+
+        if isinstance(content, dict):
+            if "text" in content and isinstance(content["text"], str):
+                return content["text"]
+            return json.dumps(content, default=str)
+
+        if hasattr(content, "text"):
+            text_value = getattr(content, "text")
+            if isinstance(text_value, str):
+                return text_value
+
         try:
-            await client.connect_to_server(sys.argv[1])
-            await client.chat_loop()
-        finally:
-            await client.cleanup()
-
-    if __name__ == "__main__":
-        import sys
-        asyncio.run(main())
+            return json.dumps(content, default=str)
+        except (TypeError, ValueError):
+            return str(content)
 
 
+async def main():
+    if len(sys.argv) < 2:
+        print("Usage: python client.py <path_to_server_script>")
+        sys.exit(1)
+
+    client = MCPClient()
+    try:
+        await client.connect_to_server(sys.argv[1])
+        print(f"Connected to server: {sys.argv[1]}")
+        await client.chat_loop()
+    finally:
+        print("Failed to connect to server. Cleaning up...")
+        await client.cleanup()
+
+if __name__ == "__main__":
+    asyncio.run(main())
