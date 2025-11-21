@@ -234,15 +234,22 @@ class MCPClient:
         print("\nMCP Client Started!")
         print("Type your queries or 'quit' to exit.")
 
+        full_context = ""
+
         while True:
             try:
                 query = input("\nQuery: ").strip()
 
                 if query.lower() == 'quit':
                     break
+                
+                full_context += f"User: {query}\n"
+                query = full_context + query
 
                 response = await self.process_query_openai(query)
                 print("\n" + response)
+
+                full_context += f"Assistant: {response}\n"
 
             except Exception as e:
                 print(f"\nError: {str(e)}")
