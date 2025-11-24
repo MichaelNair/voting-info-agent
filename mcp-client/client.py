@@ -22,6 +22,25 @@ load_dotenv()  # load environment variables from .env
 # source /Users/michaelnair/Desktop/random_projects/voting-info-agent/openai_key.bash
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+PATH_TO_VOTING_GUIDANCE_PROMPT = "prompts/voting_guidance_prompt.txt"
+with open(PATH_TO_VOTING_GUIDANCE_PROMPT, "r", encoding="utf-8") as f:
+    VOTING_GUIDANCE_PROMPT = f.read()
+
+import tiktoken
+OPENAI_MODEL = "gpt-5-nano-2025-08-07"
+
+# effective context window is the total context window(400000) divided by 5 (a number I pulled out of nowhere)
+# TODO: research the best number to divide by or the proportion of the total context window openai models (especially smaller ones) can use without any degredation
+EFFECTIVE_CONTEXT_WINDOW = 400000/5
+
+def count_tokens(text: str, model: str = OPENAI_MODEL) -> int:
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        # Fallback encoding compatible with most newer OpenAI models
+        encoding = tiktoken.get_encoding("cl100k_base")
+    return len(encoding.encode(text))
+
 class MCPClient:
     def __init__(self):
         # Initialize session and client objects
@@ -160,7 +179,7 @@ class MCPClient:
 
         async def create_completion():
             kwargs = {
-                "model": "gpt-5-nano-2025-08-07",
+                "model": OPENAI_MODEL,
                 "messages": messages
             }
             if available_tools:
@@ -235,6 +254,18 @@ class MCPClient:
         print("Type your queries or 'quit' to exit.")
 
         full_context = ""
+        if VOTING_GUIDANCE_PROMPT:
+            full_context = (
+                "Voting guidance instructions:\n"
+                f"{VOTING_GUIDANCE_PROMPT}\n\n"
+            )
+        
+        # check what percentage of context has been used
+        context_tokens = count_tokens(full_context, OPENAI_MODEL)
+        # print the percentage of the recommended context window that has been used
+        percentage_used = context_tokens / EFFECTIVE_CONTEXT_WINDOW * 100
+        if percentage_used > 100:
+            print(f"Warning: {percentage_used}% of the recommended context window has been used. It is recommended that you restart the chat and summarize your findings so far.")
 
         while True:
             try:

@@ -21,9 +21,8 @@ VOTING_DATA_API_BASE = "https://api.voting-data.gov"
 USER_AGENT = "voting-data-app/1.0"
 
 CIVIC_INFO_API_BASE = "https://www.googleapis.com/civicinfo/v2"
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PROMPTS_DIR = PROJECT_ROOT / "prompts"
-WEB_SEARCH_PROMPT_PATH = PROMPTS_DIR / "web_search_prompt.txt"
+
+PATH_TO_WEB_SEARCH_PROMPT = "prompts/web_search_prompt.txt"
 
 # Load environment and prompt text
 load_dotenv()
@@ -31,23 +30,13 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 CIVIC_INFO_API_KEY = os.getenv("CIVIC_INFO_API_KEY")
 openai_client: AsyncOpenAI | None = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-
-def _load_prompt_text(path: Path) -> str:
-    try:
-        text = path.read_text(encoding="utf-8").strip()
-        if text:
-            return text
-    except FileNotFoundError:
-        logging.warning("Prompt file %s not found. Using default prompt.", path)
-    except OSError as exc:
-        logging.warning("Unable to read prompt file %s: %s. Using default prompt.", path, exc)
-
 @mcp.tool()
 async def get_current_date() -> str:
     """Get the current date and return it as a string
     Returns:
         A string containing the current date in the format "YYYY-MM-DD".
     """
+    logging.info("getting today's date")
     return datetime.now().strftime("%Y-%m-%d")
 
 # TODO: make parse address tool
@@ -71,6 +60,7 @@ async def get_context_from_url(url: str, selector: str | None = None) -> str:
         When an error occurs (network issue, missing selector, etc.) the return
         value is a human-readable error message instead of raw exceptions.
     """
+    logging.info(f"accessing {url} for more information")
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -159,6 +149,7 @@ async def search_web(query: str) -> str:
     Returns:
         A string containing the search results.
     """
+    logging.info(f"searching the web -> query: {query}")
     if not query or not query.strip():
         logging.warning("search_web called without a query; returning validation error to client.")
         return "Please provide a non-empty search query."
@@ -167,7 +158,12 @@ async def search_web(query: str) -> str:
         logging.error("search_web called but OpenAI API key is not configured.")
         return "OpenAI API key is not configured on the server."
 
-    web_search_prompt = _load_prompt_text(WEB_SEARCH_PROMPT_PATH)
+    if not os.path.exists(PATH_TO_WEB_SEARCH_PROMPT):
+        logging.error(f"Web search prompt file not found at {PATH_TO_WEB_SEARCH_PROMPT}")
+        return "Web search prompt file not found."
+
+    with open(PATH_TO_WEB_SEARCH_PROMPT, "r", encoding="utf-8") as f:
+        web_search_prompt = f.read()
 
     try:
         response = await openai_client.responses.create(
@@ -267,6 +263,7 @@ async def find_district_and_precinct(address: str) -> str:
         }.
         ```
     """
+    logging.info(f"finding the voting district or precinct for {address}")
     if not address or not address.strip():
         return "Please provide a complete address (street number, street name, city, state, zip code)."
 
@@ -294,7 +291,8 @@ async def find_district_and_precinct(address: str) -> str:
 @mcp.tool()
 async def list_upcoming_elections() -> str:
     """Expose the Google Civic Information electionQuery endpoint via MCP.
-    This will return all upcoming elections regardless of state or locality, look at the ocdDivisionId to determine the state and county
+    This will return all upcoming elections regardless of state or locality, look at the ocdDivisionId to determine the state and county.
+    Use this when asked about upcoming elections
     Args:
         no arguments
     Returns:
@@ -339,6 +337,7 @@ async def get_election_info(election_id: str, state: str) -> str:
         ```json
         
     """
+    logging.info(f"gathering information for an upcoming election in {state}")
     try:
         payload = _query_voter_info(
             state=state,
@@ -384,6 +383,7 @@ async def get_voter_info(
     Returns:
         A string in JSON format containing the voter information.
     """
+    logging.info(f"gathering information about upcoming elections and how to vote in your area")
     if not address or not address.strip():
         return "Please provide a complete address (street, city, state, and ZIP code)."
 
@@ -414,11 +414,6 @@ async def get_voter_info(
         return "Unable to complete the voter information lookup right now. Please try again later."
 
     return json.dumps(payload, indent=2)
-
-# @mcp.tool()
-# async def get_nearest_polling_location(address: str) -> str:
-#     """Get the nearest polling location for a given address."""
-#     return "Polling location lookup not implemented yet."
 
 def main():
     # Initialize and run the server
