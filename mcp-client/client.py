@@ -26,6 +26,10 @@ PATH_TO_VOTING_GUIDANCE_PROMPT = "prompts/voting_guidance_prompt.txt"
 with open(PATH_TO_VOTING_GUIDANCE_PROMPT, "r", encoding="utf-8") as f:
     VOTING_GUIDANCE_PROMPT = f.read()
 
+PATH_TO_USER_INTRO = "prompts/user_intro.txt"
+with open(PATH_TO_USER_INTRO, "r", encoding="utf-8") as f:
+    USER_INTRO_TEXT = f.read().strip()
+
 import tiktoken
 OPENAI_MODEL = "gpt-5-nano-2025-08-07"
 
@@ -266,6 +270,9 @@ class MCPClient:
         percentage_used = context_tokens / EFFECTIVE_CONTEXT_WINDOW * 100
         if percentage_used > 100:
             print(f"Warning: {percentage_used}% of the recommended context window has been used. It is recommended that you restart the chat and summarize your findings so far.")
+
+        if USER_INTRO_TEXT:
+            print(f"\n{USER_INTRO_TEXT}\n")
 
         while True:
             try:

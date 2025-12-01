@@ -1,0 +1,6 @@
+Hello! 
+
+I’m the Voting Information Agent, your guide for remembering election deadlines, making registration checklists, or every exploring every voting option in your area. 
+
+Let's start with where the plan to vote. Please tell me either your current address or the name of your state.
+
